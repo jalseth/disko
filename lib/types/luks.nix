@@ -31,7 +31,7 @@ let
     if config.tpmDevice == null || keyFile != null then
       null
     else
-      ''<(set +x; xxd -l 32 -p /dev/urandom | tr -d ' \n'; set -x)'';
+      ''<(set +x; echo -n "asdf"; set -x)'';
   finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   keyFileArgs = ''
     ${lib.optionalString (finalKeyFile != null) "--key-file ${finalKeyFile}"} \
