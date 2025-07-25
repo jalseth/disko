@@ -25,13 +25,28 @@ let
       ) config.keyFile
     else
       null;
+  # luksFormat does not support TPM2 directly. If no key file is configured, generate a temporary
+  # key that is removed after enrolling the TPM2 device.
+  tpmTempKeyFile =
+    if config.tpmDevice == null || keyFile != null then
+      null
+    else
+      ''<(set +x; xxd -l 32 -p /dev/urandom | tr -d ' \n'; set -x)'';
+  finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   keyFileArgs = ''
-    ${lib.optionalString (keyFile != null) "--key-file ${keyFile}"} \
+    ${lib.optionalString (finalKeyFile != null) "--key-file ${finalKeyFile}"} \
     ${lib.optionalString (lib.hasAttr "keyFileSize" config.settings) "--keyfile-size ${builtins.toString config.settings.keyFileSize}"} \
     ${lib.optionalString (lib.hasAttr "keyFileOffset" config.settings) "--keyfile-offset ${builtins.toString config.settings.keyFileOffset}"} \
   '';
+  # TODO: Add wipe-slot below.
+  tpmArgs = ''
+    ${lib.optionalString (config.tpmDevice != null) "--tpm2-device=${config.tpmDevice}"} \
+  '';
+  tpmSettings = if config.tpmDevice == null then {} else {
+    crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];
+  };
   cryptsetupOpen = ''
-    cryptsetup open "${config.device}" "${config.name}" \
+    systemd-cryptsetup attach ${config.name} ${config.device} \
       ${lib.optionalString (config.settings.allowDiscards or false) "--allow-discards"} \
       ${
         lib.optionalString (config.settings.bypassWorkqueues or false
@@ -71,9 +86,15 @@ in
     };
     askPassword = lib.mkOption {
       type = lib.types.bool;
-      default = config.keyFile == null && config.passwordFile == null && (!config.settings ? "keyFile");
-      defaultText = "true if neither keyFile nor passwordFile are set";
+      default = config.keyFile == null && config.passwordFile == null && (!config.settings ? "keyFile") && config.tpmDevice == null;
+      defaultText = "true if neither keyFile, passwordFile, or tpmDevice are set";
       description = "Whether to ask for a password for initial encryption";
+    };
+    tpmDevice = lib.mkOption {
+      type = lib.types.string;
+      default = null;
+      description = "Path to the TPM2 device. Also accepts a special value of `auto`.";
+      example = "/dev/tpmrm0";
     };
     settings = lib.mkOption {
       type = lib.types.attrsOf lib.types.anything;
@@ -81,12 +102,12 @@ in
       description = "LUKS settings (as defined in configuration.nix in boot.initrd.luks.devices.<name>)";
       example = ''
         {
-                  keyFile = "/tmp/disk.key";
-                  keyFileSize = 2048;
-                  keyFileOffset = 1024;
-                  fallbackToPassword = true;
-                  allowDiscards = true;
-                };
+          keyFile = "/tmp/disk.key";
+          keyFileSize = 2048;
+          keyFileOffset = 1024;
+          fallbackToPassword = true;
+          allowDiscards = true;
+        };
       '';
     };
     additionalKeyFiles = lib.mkOption {
@@ -158,6 +179,9 @@ in
             done
           ''}
           cryptsetup -q luksFormat "${config.device}" ${toString config.extraFormatArgs} ${keyFileArgs}
+          ${lib.optionalString (config.tpmDevice != null) ''
+            systemd-cryptenroll ${config.device} --unlock-key-file=${finalKeyFile} ${tpmArgs}
+          ''}
         fi
 
         if ! cryptsetup status "${config.name}" >/dev/null; then
@@ -224,7 +248,7 @@ in
           {
             boot.initrd.luks.devices.${config.name} = {
               inherit (config) device;
-            } // config.settings;
+            } // config.settings // tpmSettings;
           }
         ])
         ++ (lib.optional (config.content != null) config.content._config);
