@@ -116,6 +116,7 @@
             pkgs.nixfmt-rfc-style
             pkgs.shellcheck
             pkgs.treefmt
+            pkgs.unixtools.xxd
           ];
         }
       );
