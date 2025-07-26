@@ -47,11 +47,6 @@ let
   };
   cryptsetupOpen = ''
     systemd-cryptsetup attach ${config.name} ${config.device} \
-      ${lib.optionalString (config.settings.allowDiscards or false) "--allow-discards"} \
-      ${
-        lib.optionalString (config.settings.bypassWorkqueues or false
-        ) "--perf-no_read_workqueue --perf-no_write_workqueue"
-      } \
       ${toString config.extraOpenArgs} \
       ${keyFileArgs} \
   '';
