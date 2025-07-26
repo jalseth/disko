@@ -33,7 +33,7 @@ let
 
   useTPM = config.tpmDevice != null;
   onlyTPM = useTPM && keyFile == null;
-  tpmTempKeyFile = if onlyTPM then ''<(set +x; echo -n ""; set -x)'' else null;
+  tpmTempKeyFile = if onlyTPM then "/dev/urandom" else null;
   finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   tpmSettings = if useTPM then {crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];} else {};
   tpmArgs = ''
