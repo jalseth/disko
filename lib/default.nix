@@ -694,7 +694,7 @@ let
               with lib;
               unique (
                 (flatten (map (dev: dev._pkgs pkgs) (flatten (map attrValues (attrValues devices)))))
-                ++ [ pkgs.coreutils-full ]
+                ++ [ pkgs.coreutils-full pkgs.unixtools.xxd ]
               );
           };
           _scripts = lib.mkOption {
