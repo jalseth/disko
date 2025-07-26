@@ -185,7 +185,7 @@ in
         fi
 
         if ! cryptsetup status "${config.name}" >/dev/null; then
-          ${cryptsetupOpen} --persistent
+          ${cryptsetupOpen} ${lib.optionalString (!useTPM) "--persistent"}
         fi
         ${toString (
           lib.forEach config.additionalKeyFiles (keyFile: ''
