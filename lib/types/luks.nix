@@ -181,6 +181,7 @@ in
 
           ${lib.optionalString onlyTPM ''
             head -c16 < /dev/urandom | base64 > ${tpmTempKeyFile}
+            chmod 0600 ${tpmTempKeyFile}
           ''}
 
           cryptsetup -q luksFormat "${config.device}" ${toString config.extraFormatArgs} ${keyFileArgs}
