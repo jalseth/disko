@@ -33,7 +33,7 @@ let
 
   useTPM = config.tpmDevice != null;
   onlyTPM = useTPM && keyFile == null;
-  tpmTempKeyFile = if onlyTPM then "/dev/urandom" else null;
+  tpmTempKeyFile = if onlyTPM then "/tmp/diskoTemp-${config.device}" else null;
   finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   tpmSettings = if useTPM then {crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];} else {};
   tpmArgs = ''
@@ -178,6 +178,11 @@ in
               echo "Passwords did not match, please try again."
             done
           ''}
+
+          ${lib.optionalString onlyTPM ''
+            head -c16 < /dev/urandom | base64 > ${tpmTempKeyFile}
+          ''}
+
           cryptsetup -q luksFormat "${config.device}" ${toString config.extraFormatArgs} ${keyFileArgs}
           ${lib.optionalString useTPM ''
             systemd-cryptenroll ${config.device} --unlock-key-file=${finalKeyFile} ${tpmArgs}
