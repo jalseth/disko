@@ -33,15 +33,15 @@ let
 
   useTPM = config.tpmDevice != null;
   onlyTPM = useTPM && keyFile == null;
-  tpmTempKeyFile = if onlyTPM then ''<(set +x; echo -n "asdf"; set -x)'' else null;
+  tpmTempKeyFile = if onlyTPM then ''<(set +x; xxd -l 16 -p /dev/urandom | tr -d ' \n'; set -x)'' else null;
   finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   tpmSettings = if useTPM then {crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];} else {};
   tpmArgs = ''
     ${lib.optionalString useTPM "--tpm2-device=${config.tpmDevice}"} \
     ${lib.optionalString onlyTPM "--wipe-slot=0"} \
   '';
-  
-  cryptsetupOpen = 
+
+  cryptsetupOpen =
     if useTPM then
       "systemd-cryptsetup attach ${config.name} ${config.device}"
     else
