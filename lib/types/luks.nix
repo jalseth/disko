@@ -33,7 +33,7 @@ let
 
   useTPM = config.tpmDevice != null;
   onlyTPM = useTPM && keyFile == null;
-  tpmTempKeyFile = if onlyTPM then "/tmp/diskoTemp-${config.device}" else null;
+  tpmTempKeyFile = if onlyTPM then "/tmp/diskoTemp-${config.name}" else null;
   finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   tpmSettings = if useTPM then {crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];} else {};
   tpmArgs = ''
