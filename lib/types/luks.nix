@@ -43,7 +43,7 @@ let
   
   cryptsetupOpen = 
     if useTPM then
-      "systemd-cryptsetup attach ${config.name} ${config.device} --tpm2-device=${config.tpmDevice}"
+      "systemd-cryptsetup attach ${config.name} ${config.device}"
     else
       ''
         cryptsetup open "${config.device}" "${config.name}" \
