@@ -25,31 +25,36 @@ let
       ) config.keyFile
     else
       null;
-  # luksFormat does not support TPM2 directly. If no key file is configured, generate a temporary
-  # key that is removed after enrolling the TPM2 device.
-  tpmTempKeyFile =
-    if config.tpmDevice == null || keyFile != null then
-      null
-    else
-      ''<(set +x; echo -n "asdf"; set -x)'';
-  finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
   keyFileArgs = ''
     ${lib.optionalString (finalKeyFile != null) "--key-file ${finalKeyFile}"} \
     ${lib.optionalString (lib.hasAttr "keyFileSize" config.settings) "--keyfile-size ${builtins.toString config.settings.keyFileSize}"} \
     ${lib.optionalString (lib.hasAttr "keyFileOffset" config.settings) "--keyfile-offset ${builtins.toString config.settings.keyFileOffset}"} \
   '';
-  # TODO: Add wipe-slot below.
+
+  useTPM = config.tpmDevice != null;
+  onlyTPM = useTPM && keyFile == null;
+  tpmTempKeyFile = if onlyTPM then ''<(set +x; echo -n "asdf"; set -x)'' else null;
+  finalKeyFile = if tpmTempKeyFile != null then tpmTempKeyFile else keyFile;
+  tpmSettings = if useTPM then {crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];} else {};
   tpmArgs = ''
-    ${lib.optionalString (config.tpmDevice != null) "--tpm2-device=${config.tpmDevice}"} \
+    ${lib.optionalString useTPM "--tpm2-device=${config.tpmDevice}"} \
+    ${lib.optionalString onlyTPM "--wipe-slot=0"} \
   '';
-  tpmSettings = if config.tpmDevice == null then {} else {
-    crypttabExtraOpts = [ "tpm2-device=${config.tpmDevice}" ];
-  };
-  cryptsetupOpen = ''
-    systemd-cryptsetup attach ${config.name} ${config.device} \
-      ${toString config.extraOpenArgs} \
-      ${keyFileArgs} \
-  '';
+  
+  cryptsetupOpen = 
+    if useTPM then
+      "systemd-cryptsetup attach ${config.name} ${config.device} --tpm2-device=${config.tpmDevice}"
+    else
+      ''
+        cryptsetup open "${config.device}" "${config.name}" \
+          ${lib.optionalString (config.settings.allowDiscards or false) "--allow-discards"} \
+          ${
+            lib.optionalString (config.settings.bypassWorkqueues or false
+            ) "--perf-no_read_workqueue --perf-no_write_workqueue"
+          } \
+          ${toString config.extraOpenArgs} \
+          ${keyFileArgs} \
+      '';
 in
 {
   options = {
@@ -81,7 +86,7 @@ in
     };
     askPassword = lib.mkOption {
       type = lib.types.bool;
-      default = config.keyFile == null && config.passwordFile == null && (!config.settings ? "keyFile") && config.tpmDevice == null;
+      default = config.keyFile == null && config.passwordFile == null && (!config.settings ? "keyFile") && !useTPM;
       defaultText = "true if neither keyFile, passwordFile, or tpmDevice are set";
       description = "Whether to ask for a password for initial encryption";
     };
@@ -174,7 +179,7 @@ in
             done
           ''}
           cryptsetup -q luksFormat "${config.device}" ${toString config.extraFormatArgs} ${keyFileArgs}
-          ${lib.optionalString (config.tpmDevice != null) ''
+          ${lib.optionalString useTPM ''
             systemd-cryptenroll ${config.device} --unlock-key-file=${finalKeyFile} ${tpmArgs}
           ''}
         fi
